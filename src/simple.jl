@@ -11,7 +11,7 @@ end
 
 BinaryNode(data) = BinaryNode{typeof(data)}(data)
 
-nodevalue(node::BinaryNode) = node.data
+value(node::BinaryNode) = node.data
 left(node::BinaryNode) = node.left
 parent(node::BinaryNode) = node.parent
 right(node::BinaryNode) = node.right
@@ -49,8 +49,22 @@ _children(l::BinaryNode, r::BinaryNode) = (l, r)
 
 children(node::BinaryNode) =
     _children(left(node), right(node))
+#
+#ParentLinks(::Type{<:BinaryNode}) = StoredParents()
+#
+#NodeType(::Type{<:BinaryNode}) = HasNodeType()
+#nodetype(::Type{<:BinaryNode{T}}) where {T} = BinaryNode{T}
 
-ParentLinks(::Type{<:BinaryNode}) = StoredParents()
+"""
 
-NodeType(::Type{<:BinaryNode}) = HasNodeType()
-nodetype(::Type{<:BinaryNode{T}}) where {T} = BinaryNode{T}
+Inorder walk.
+
+"""
+function walk(f, node::BinaryNode)
+    walk(f, left(node))
+    f(value(node))
+    walk(f, right(node))
+    nothing
+end
+
+walk(f, ::Nothing) = nothing
