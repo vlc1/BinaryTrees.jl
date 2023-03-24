@@ -10,8 +10,10 @@ module BinaryTrees
 #                      ParentLinks
 #
 import Base: setproperty!,
+#             eltype,
              parent,
              length,
+             eachindex,
              getindex,
              haskey,
              in,

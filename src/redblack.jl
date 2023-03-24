@@ -1,206 +1,302 @@
+# search_data <-> find
 # it has unique keys
-# leftChild has keys which are less than the node
-# rightChild has keys which are greater than the node
+# left has keys which are less than the node
+# right has keys which are greater than the node
 # color is true if it's a Red Node, else it's false
-mutable struct RBTreeNode{K}
+# Think of it as a pointer or 0d array.
+mutable struct RedBlackNode{T}
     color::Bool
-    data::Union{K, Nothing}
-    leftChild::Union{Nothing, RBTreeNode{K}}
-    rightChild::Union{Nothing, RBTreeNode{K}}
-    parent::Union{Nothing, RBTreeNode{K}}
+    data::Union{Nothing,T}
+    parent::Union{Nothing,RedBlackNode{T}}
+    left::Union{Nothing,RedBlackNode{T}}
+    right::Union{Nothing,RedBlackNode{T}}
 
-    RBTreeNode{K}() where K = new{K}(true, nothing, nothing, nothing, nothing)
+    RedBlackNode{T}() where {T} = new{T}(true, nothing, nothing, nothing, nothing)
 
-    RBTreeNode{K}(d::K) where K = new{K}(true, d, nothing, nothing, nothing)
+    RedBlackNode{T}(d::T) where {T} = new{T}(true, d, nothing, nothing, nothing)
 end
 
-RBTreeNode() = RBTreeNode{Any}()
-RBTreeNode(d) = RBTreeNode{Any}(d)
+const RBNode = RedBlackNode
+#
+#RBNode() = RBNode{Any}()
+#RBNode(d) = RBNode{Any}(d)
 
-setproperty!(x::RBTreeNode{K}, f::Symbol, v) where {K} =
+setproperty!(x::RBNode, f::Symbol, v) =
     setfield!(x, f, v)
 
-function create_null_node(K::Type)
-    node = RBTreeNode{K}()
-    node.color = false
-    return node
-end
+color(node::RBNode) = node.color
+###
+# eltype(::RBNode{T}) where {T} = T
+getindex(node::RBNode) = node.data
+parent(node::RBNode) = node.parent
+left(node::RBNode) = node.left
+right(node::RBNode) = node.right
 
-mutable struct RBTree{K}
-    root::RBTreeNode{K}
-    nil::RBTreeNode{K}
+children(node::RBNode) = (left(node), right(node))
+###
+
+
+"""
+
+Color a node red (`bool == true`) or black (`bool = false`).
+
+"""
+color!(node::RBNode, bool) = (node.color = bool; node)
+parent!(node::RBNode, parent::Union{Nothing,RBNode}) = (node.parent = parent)
+left!(node::RBNode, child::Union{Nothing,RBNode}) = (node.left = child)
+right!(node::RBNode, child::Union{Nothing,RBNode}) = (node.right = child)
+
+isred(node::RBNode) = color(node)
+isblack(node::RBNode) = !color(node)
+
+red!(node::RBNode) = color!(node, true)
+black!(node::RBNode) = color!(node, false)
+
+"""
+
+Create a black sentinel.
+
+"""
+nil(T::Type) = black!(RBNode{T}())
+
+"""
+
+Includes sentinel. Should field `nil` be annotated with `const`?
+
+"""
+mutable struct RedBlackTree{T}
+    root::RBNode{T}
+    nil::RBNode{T}
     count::Int
 
-    function RBTree{K}() where K
+    function RedBlackTree{T}() where {T}
         rb = new()
-        rb.nil = create_null_node(K)
+        rb.nil = nil(T)
         rb.root = rb.nil
         rb.count = 0
         return rb
     end
 end
 
+const RBTree = RedBlackTree
+
 RBTree() = RBTree{Any}()
 
+# eltype(::RBTree{T}) where {T} = T
+root(tree::RBTree) = tree.root
+nil(tree::RBTree) = tree.nil
 length(tree::RBTree) = tree.count
 
+eachindex(tree::RBTree) = Base.OneTo(length(tree))
+
+root!(tree::RBTree, node::RBNode) = (tree.root = node; tree)
+
+isnilof(node::RBNode, tree::RBTree) = isequal(node, nil(tree))
+isrootof(node::RBNode, tree::RBTree) = isequal(node, root(tree))
+
+
 """
+
     search_node(tree, key)
 
 Returns the last visited node, while traversing through in binary-search-tree fashion looking for `key`.
+
 """
 search_node(tree, key)
 
-function search_node(tree::RBTree{K}, d::K) where K
-    node = tree.root
-    while node !== tree.nil && d != node.data
-        if d < node.data
-            node = node.leftChild
+function search_node(tree::RBTree, data)
+    node = root(tree)
+
+    while !isnilof(node, tree) && !isequal(data, getindex(node))
+        node = if data < getindex(node)
+            left(node)
         else
-            node = node.rightChild
+            right(node)
         end
     end
-    return node
+
+    node
 end
 
 """
+
     haskey(tree, key)
 
-Returns true if `key` is present in the `tree`, else returns false.
+Returns `true` if `key` is present in the `tree`, else returns `false`.
+
+!!! note
+
+    Sentinel is useful here because `getindex(nil(tree))` is defined..
+
 """
-function haskey(tree::RBTree{K}, d::K) where K
-    node = search_node(tree, d)
-    return (node.data == d)
+function haskey(tree::RBTree, data)
+    node = search_node(tree, data)
+    isequal(getindex(node),  data)
 end
 
 """
-    insert_node!(tree::RBTree, node::RBTreeNode)
+
+    insert_node!(tree::RBTree, node::RBNode)
 
 Inserts `node` at proper location by traversing through the `tree` in a binary-search-tree fashion.
-"""
-function insert_node!(tree::RBTree, node::RBTreeNode)
-    node_y = nothing
-    node_x = tree.root
 
-    while node_x !== tree.nil
-        node_y = node_x
-        if node.data < node_x.data
-            node_x = node_x.leftChild
+"""
+function insert_node!(tree::RBTree, x::RBNode)
+    y, z = root(tree), nothing
+
+    while !isnilof(y, tree)
+        z = y
+        y = if getindex(x) < getindex(y)
+            left(y)
         else
-            node_x = node_x.rightChild
+            right(y)
         end
     end
 
-    node.parent = node_y
-    if node_y == nothing
-        tree.root = node
-    elseif node.data < node_y.data
-        node_y.leftChild = node
+    parent!(x, z)
+
+    if isnothing(z)
+        root!(tree, x)
+    elseif getindex(x) < getindex(z)
+        left!(z, x)
     else
-        node_y.rightChild = node
+        right!(z, x)
     end
+
+    nothing
 end
 
 """
-    left_rotate!(tree::RBTree, node_x::RBTreeNode)
 
-Performs a left-rotation on `node_x` and updates `tree.root`, if required.
+    left_rotate!(tree::RBTree, x::RBNode)
+
+Performs a left-rotation on `x` and updates `root(tree)`, if required.
+
 """
-function left_rotate!(tree::RBTree, node_x::RBTreeNode)
-    node_y = node_x.rightChild
-    node_x.rightChild = node_y.leftChild
-    if node_y.leftChild !== tree.nil
-        node_y.leftChild.parent = node_x
+function left_rotate!(tree::RBTree, x::RBNode)
+    y = right(x)
+    right!(x, left(y))
+
+    if !isnilof(left(y), tree)
+        parent!(left(y), x)
     end
-    node_y.parent = node_x.parent
-    if (node_x.parent == nothing)
-        tree.root = node_y
-    elseif (node_x == node_x.parent.leftChild)
-        node_x.parent.leftChild = node_y
+
+    parent!(y, parent(x))
+
+    if isnothing(parent(x))
+        root!(tree, y)
+    elseif isequal(x, left(parent(x)))
+        left!(parent(x), y)
     else
-        node_x.parent.rightChild = node_y
+        right!(parent(x), y)
     end
-    node_y.leftChild = node_x
-    node_x.parent = node_y
+
+    left!(y, x)
+    parent!(x, y)
+
+    nothing
 end
 
 """
-    right_rotate!(tree::RBTree, node_x::RBTreeNode)
 
-Performs a right-rotation on `node_x` and updates `tree.root`, if required.
+    right_rotate!(tree::RBTree, x::RBNode)
+
+Performs a right-rotation on `x` and updates `root(tree)`, if required.
+
 """
-function right_rotate!(tree::RBTree, node_x::RBTreeNode)
-    node_y = node_x.leftChild
-    node_x.leftChild = node_y.rightChild
-    if node_y.rightChild !== tree.nil
-        node_y.rightChild.parent = node_x
+function right_rotate!(tree::RBTree, x::RBNode)
+    y = left(x)
+    left!(x, right(y))
+
+    if !isnilof(right(y), tree)
+        parent!(right(y), x)
     end
-    node_y.parent = node_x.parent
-    if (node_x.parent == nothing)
-        tree.root = node_y
-    elseif (node_x == node_x.parent.leftChild)
-        node_x.parent.leftChild = node_y
+
+    parent!(y, parent(x))
+
+    if isnothing(parent(x))
+        root!(tree, y)
+    elseif isequal(x, left(parent(x)))
+        left!(parent(x), y)
     else
-        node_x.parent.rightChild = node_y
+        right!(parent(x), y)
     end
-    node_y.rightChild = node_x
-    node_x.parent = node_y
+
+    right!(y, x)
+    parent!(x, y)
+
+    nothing
 end
 
 """
-   fix_insert!(tree::RBTree, node::RBTreeNode)
+
+   fix_insert!(tree::RBTree, node::RBNode)
 
 This method is called to fix the property of having no two adjacent nodes of red color in the `tree`.
+
 """
-function fix_insert!(tree::RBTree, node::RBTreeNode)
-    parent = nothing
-    grand_parent = nothing
+function fix_insert!(tree::RBTree, node::RBNode)
+    mum = nothing
+    nan = nothing
+
     # for root node, we need to change the color to black
     # other nodes, we need to maintain the property such that
     # no two adjacent nodes are red in color
-    while  node != tree.root && node.parent.color
-        parent = node.parent
-        grand_parent = parent.parent
+    while !isrootof(node, tree) && isred(parent(node))
+        mum = parent(node)
+        nan = parent(mum)
 
-        if (parent == grand_parent.leftChild) # parent is the leftChild of grand_parent
-            uncle = grand_parent.rightChild
+        # parent is the left of grand-parent
+        if isequal(mum, left(nan))
+            aunt = right(nan)
 
-            if (uncle.color) # uncle is red in color
-                grand_parent.color = true
-                parent.color = false
-                uncle.color = false
-                node = grand_parent
-            else  # uncle is black in color
-                if (node == parent.rightChild) # node is rightChild of its parent
-                    node = parent
+            # aunt is red
+            if isred(aunt)
+                red!(nan)
+                black!(mum)
+                black!(aunt)
+                node = nan
+            # aunt is black
+            else
+                # node is right of its parent
+                if isequal(node, right(mum))
+                    node = mum
                     left_rotate!(tree, node)
                 end
-                # node is leftChild of its parent
-                node.parent.color = false
-                node.parent.parent.color = true
-                right_rotate!(tree, node.parent.parent)
+                # node is left of its parent
+                black!(parent(node))
+                red!(parent(parent(node)))
+                right_rotate!(tree, parent(parent(node)))
             end
-        else # parent is the rightChild of grand_parent
-            uncle = grand_parent.leftChild
 
-            if (uncle.color) # uncle is red in color
-                grand_parent.color = true
-                parent.color = false
-                uncle.color = false
-                node = grand_parent
-            else  # uncle is black in color
-                if (node == parent.leftChild) # node is leftChild of its parent
-                    node = parent
+        # parent is the right of grand_parent
+        else
+            aunt = left(nan)
+
+            # aunt is red in color
+            if isred(aunt)
+                red!(nan)
+                black!(mum)
+                black!(aunt)
+                node = nan
+            # aunt is black in color
+            else
+                # node is left of its parent
+                if isequal(node, left(mum))
+                    node = mum
                     right_rotate!(tree, node)
                 end
-                # node is rightChild of its parent
-                node.parent.color = false
-                node.parent.parent.color = true
-                left_rotate!(tree, node.parent.parent)
+                # node is right of its parent
+                black!(parent(node))
+                red!(parent(parent(node)))
+                left_rotate!(tree, parent(parent(node)))
             end
         end
     end
-    tree.root.color = false
+
+    black!(root(tree))
+
+    nothing
 end
 
 """
@@ -208,205 +304,233 @@ end
 
 Inserts `key` in the `tree` if it is not present.
 """
-function insert!(tree::RBTree{K}, d::K) where K
+function insert!(tree::RBTree{T}, data::T) where {T}
     # if the key exists in the tree, no need to insert
-    haskey(tree, d) && return tree
+    haskey(tree, data) && return tree
 
     # insert, if not present in the tree
-    node = RBTreeNode{K}(d)
-    node.leftChild = node.rightChild = tree.nil
+    node = RBNode{T}(data)
+    left!(node, nil(tree))
+    right!(node, nil(tree))
 
     insert_node!(tree, node)
 
-    if node.parent == nothing
-        node.color = false
-    elseif node.parent.parent == nothing
+    if isnothing(parent(node))
+        black!(node)
+    elseif isnothing(parent(parent(node)))
         ;
     else
         fix_insert!(tree, node)
     end
+
     tree.count += 1
-    return tree
+
+    tree
 end
 
 """
+
     push!(tree, key)
 
 Inserts `key` in the `tree` if it is not present.
 """
-function push!(tree::RBTree{K}, key0) where K
-    key = convert(K, key0)
+function push!(tree::RBTree{T}, key0) where {T}
+    key = convert(T, key0)
     insert!(tree, key)
 end
 
 """
-    delete_fix(tree::RBTree, node::Union{RBTreeNode, Nothing})
+
+    delete_fix(tree::RBTree, node::Union{RBNode, Nothing})
 
 This method is called when a black node is deleted because it violates the black depth property of the RBTree.
+
 """
-function delete_fix(tree::RBTree, node::Union{RBTreeNode, Nothing})
-    while node != tree.root && !node.color
-         if node == node.parent.leftChild
-            sibling = node.parent.rightChild
-            if sibling.color
-                sibling.color = false
-                node.parent.color = true
-                left_rotate!(tree, node.parent)
-                sibling = node.parent.rightChild
+function delete_fix(tree::RBTree, node::Union{RBNode, Nothing})
+    while !isrootof(node, tree) && isblack(node)
+        if isequal(node, left(parent(node)))
+            sibling = right(parent(node))
+
+            if isred(sibling)
+                black!(sibling)
+                red!(parent(node))
+                left_rotate!(tree, parent(node))
+                sibling = right(parent(node))
             end
 
-            if !sibling.rightChild.color && !sibling.leftChild.color
-                sibling.color = true
-                node = node.parent
+            if all(isblack, children(sibling))
+                red!(sibling)
+                node = parent(node)
             else
-                if !sibling.rightChild.color
-                    sibling.leftChild.color = false
-                    sibling.color = true
+                if isblack(right(sibling))
+                    black!(left(sibling))
+                    red!(sibling)
                     right_rotate!(tree, sibling)
-                    sibling = node.parent.rightChild
+                    sibling = right(parent(node))
                 end
 
-                sibling.color = node.parent.color
-                node.parent.color = false
-                sibling.rightChild.color = false
-                left_rotate!(tree, node.parent)
-                node = tree.root
+                color!(sibling, color(parent(node)))
+                black!(parent(node))
+                black!(right(sibling))
+                left_rotate!(tree, parent(node))
+                node = root(tree)
             end
+
         else
-            sibling = node.parent.leftChild
-            if sibling.color
-                sibling.color = false
-                node.parent.color = true
-                right_rotate!(tree, node.parent)
-                sibling = node.parent.leftChild
+            sibling = left(parent(node))
+
+            if isred(sibling)
+                black!(sibling)
+                red!(parent(node))
+                right_rotate!(tree, parent(node))
+                sibling = left(parent(node))
             end
 
-            if !sibling.rightChild.color && !sibling.leftChild.color
-                sibling.color = true
-                node = node.parent
+            if all(isblack, children(sibling))
+                red!(sibling)
+                node = parent(node)
             else
-                if !sibling.leftChild.color
-                    sibling.rightChild.color = false
-                    sibling.color = true
+                if isblack(left(sibling))
+                    black!(right(sibling))
+                    red!(sibling)
                     left_rotate!(tree, sibling)
-                    sibling = node.parent.leftChild
+                    sibling = left(parent(node))
                 end
 
-                sibling.color = node.parent.color
-                node.parent.color = false
-                sibling.leftChild.color = false
-                right_rotate!(tree, node.parent)
-                node = tree.root
+                color!(sibling, color(parent(node)))
+                black!(parent(node))
+                black!(left(sibling))
+                right_rotate!(tree, parent(node))
+                node = root(tree)
             end
         end
     end
-    node.color = false
-    return nothing
+
+    black!(node)
+
+    nothing
 end
 
 """
-    rb_transplant(tree::RBTree, u::Union{RBTreeNode, Nothing}, v::Union{RBTreeNode, Nothing})
+
+    transplant(tree::RBTree, u::Union{RBNode, Nothing}, v::Union{RBNode, Nothing})
 
 Replaces `u` by `v` in the `tree` and updates the `tree` accordingly.
+
 """
-function rb_transplant(tree::RBTree, u::Union{RBTreeNode, Nothing}, v::Union{RBTreeNode, Nothing})
-    if u.parent == nothing
-        tree.root = v
-    elseif u == u.parent.leftChild
-        u.parent.leftChild = v
+function transplant(tree::RBTree, u::Union{RBNode, Nothing}, v::Union{RBNode, Nothing})
+    if isnothing(parent(u))
+        root!(tree, v)
+    elseif isequal(u, left(parent(u)))
+        left!(parent(u), v)
     else
-        u.parent.rightChild = v
+        right!(parent(u), v)
     end
-    v.parent = u.parent
+
+    parent!(v, parent(u))
 end
 
 """
-   minimum_node(tree::RBTree, node::RBTreeNode)
 
-Returns the RBTreeNode with minimum value in subtree of `node`.
+   minimum_node(tree::RBTree, node::RBNode)
+
+Returns the `RBNode` with minimum value in subtree of `node`.
+
 """
-function minimum_node(tree::RBTree, node::RBTreeNode)
-    (node === tree.nil) && return node
-    while node.leftChild !== tree.nil
-        node = node.leftChild
+function minimum_node(tree::RBTree, node::RBNode)
+    isnilof(node, tree) && return node
+
+    while !isnilof(left(node), tree)
+        node = left(node)
     end
+
     return node
 end
 
 """
+
     delete!(tree::RBTree, key)
 
 Deletes `key` from `tree`, if present, else returns the unmodified tree.
-"""
-function delete!(tree::RBTree{K}, d::K) where K
-    z = tree.nil
-    node = tree.root
 
-    while node !== tree.nil
-        if node.data == d
+"""
+function delete!(tree::RBTree{T}, data::T) where {T}
+    z = nil(tree)
+    node = root(tree)
+
+    while !isnilof(node, tree)
+        if isequal(getindex(node), data)
             z = node
         end
 
-        if d < node.data
-            node = node.leftChild
+        node = if data < getindex(node)
+            left(node)
         else
-            node = node.rightChild
+            right(node)
         end
     end
 
-    (z === tree.nil) && return tree
+    isnilof(z, tree) && return tree
 
     y = z
-    y_original_color = y.color
-    x = RBTreeNode{K}()
-    if z.leftChild === tree.nil
-        x = z.rightChild
-        rb_transplant(tree, z, z.rightChild)
-    elseif z.rightChild === tree.nil
-        x = z.leftChild
-        rb_transplant(tree, z, z.leftChild)
-    else
-        y = minimum_node(tree, z.rightChild)
-        y_original_color = y.color
-        x = y.rightChild
+    ywasred = isred(y)
+    x = RBNode{T}()
 
-        if y.parent == z
-            x.parent = y
+    if isnilof(left(z), tree)
+        x = right(z)
+        transplant(tree, z, right(z))
+    elseif isnilof(right(z), tree)
+        x = left(z)
+        transplant(tree, z, left(z))
+    else
+        y = minimum_node(tree, right(z))
+        ywasred = isred(y)
+        x = right(y)
+
+        if isequal(parent(y), z)
+            parent!(x, y)
         else
-            rb_transplant(tree, y, y.rightChild)
-            y.rightChild = z.rightChild
-            y.rightChild.parent = y
+            transplant(tree, y, right(y))
+            right!(y, right(z))
+            parent!(right(y), y)
         end
 
-        rb_transplant(tree, z, y)
-        y.leftChild = z.leftChild
-        y.leftChild.parent = y
-        y.color = z.color
+        transplant(tree, z, y)
+        left!(y, left(z))
+        parent!(left(y), y)
+        color!(y, color(z))
     end
 
-    !y_original_color && delete_fix(tree, x)
+    ywasred || delete_fix(tree, x)
     tree.count -= 1
-    return tree
+
+    tree
 end
 
 in(key, tree::RBTree) = haskey(tree, key)
 
 """
+
     getindex(tree, ind)
 
 Gets the key present at index `ind` of the tree. Indexing is done in increasing order of key.
+
 """
-function getindex(tree::RBTree{K}, ind) where K
-    @boundscheck (1 <= ind <= tree.count) || throw(ArgumentError("$ind should be in between 1 and $(tree.count)"))
-    function traverse_tree_inorder(node::RBTreeNode{K}) where K
-        if (node !== tree.nil)
-            left = traverse_tree_inorder(node.leftChild)
-            right = traverse_tree_inorder(node.rightChild)
-            append!(push!(left, node.data), right)
+function getindex(tree::RBTree{T}, ind) where {T}
+    @boundscheck in(ind, eachindex(tree)) ||
+        throw(ArgumentError("$ind should be in between 1 and $(length(tree))"))
+
+    function traverse_tree_inorder(node::RBNode{T}) where {T}
+        if !isnilof(node, tree)
+            l = traverse_tree_inorder(left(node))
+            r = traverse_tree_inorder(right(node))
+            append!(push!(l, getindex(node)), r)
         else
-            return K[]
+            return T[]
         end
     end
-    arr = traverse_tree_inorder(tree.root)
-    return @inbounds arr[ind]
+
+    arr = traverse_tree_inorder(root(tree))
+
+    @inbounds arr[ind]
 end

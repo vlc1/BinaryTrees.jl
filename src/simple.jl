@@ -1,20 +1,24 @@
+# Make this an abstract type (`AbstractBinaryNode`)
+# For sentinel: `data::Union{Nothing,T}`
 mutable struct BinaryNode{T}
-    data::T
+    data::Union{Nothing,T}
     parent::Union{Nothing,BinaryNode{T}}
     left::Union{Nothing,BinaryNode{T}}
     right::Union{Nothing,BinaryNode{T}}
 
-    function BinaryNode{T}(data, parent=nothing, l=nothing, r=nothing) where {T}
+    function BinaryNode{T}(data=nothing, parent=nothing, l=nothing, r=nothing) where {T}
         new{T}(data, parent, l, r)
     end
 end
 
 BinaryNode(data) = BinaryNode{typeof(data)}(data)
 
-value(node::BinaryNode) = node.data
-left(node::BinaryNode) = node.left
+###
+getindex(node::BinaryNode) = node.data
 parent(node::BinaryNode) = node.parent
+left(node::BinaryNode) = node.left
 right(node::BinaryNode) = node.right
+###
 
 """
 
